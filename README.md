@@ -3,5 +3,5 @@
 Ball in ball
 
 <p align="center">
-<img src="demo.jpg" width="75%"></img>
+<img src="screenshots/demo.jpg" width="75%"></img>
 </p>
