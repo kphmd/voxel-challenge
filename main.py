@@ -3,75 +3,61 @@ import taichi as ti
 from taichi.math import *
 
 scene = Scene(voxel_edges=0, exposure=2)
-scene.set_floor(-0.85, (1.0, 1.0, 1.0))
+scene.set_floor(-1.2, (1.0, 1.0, 1.0))
 scene.set_background_color((0.5, 0.5, 0.4))
-scene.set_directional_light((1, 5, 10), 0.2, (1, 0.8, 0.6))
+scene.set_directional_light((5, 15, 1), 0.1, (1.0, 1.0, 1.0))
 
 @ti.func
-def create_block(pos, size, color, color_noise):
-    for I in ti.grouped(
-            ti.ndrange((pos[0], pos[0] + size[0]), (pos[1], pos[1] + size[1]),
-                       (pos[2], pos[2] + size[2]))):
-        scene.set_voxel(I, 1, color + color_noise * ti.random())
+def sdf(x,y,z) :
+    res = 1
+    r2 = x*x + y*y + z*z 
+    r1 = ti.abs(x) + ti.abs(y) + ti.abs(z)
+    r0 = (ti.max(ti.abs(x),ti.max(abs(y),abs(z))))
 
-@ti.func
-def create_cut_ball(pos, size, color, color_noise) :
-    r = size
-    for x in range(-r,r) :
-        for y in range(-r,r) :
-            z2 = r*r-x*x-y*y
-            if z2 < 0 :
-                continue
-            z = ti.sqrt(z2)
+    if r0 >= 63 :
+        res = 0
 
-            i,j,k=0.0,0.0,0.0
+    a,b,c,d=50.0,50.0,50.0,50*1.73
+    d2 = (x-a)**2 + (y-b)**2 + (z-c)**2
+    if d2 <= d**2 :
+        res = 0
 
-            if x > 0 and y > 0 and z > 0 :
-                pass
-            else :
-                i,j,k = x+pos.x,y+pos.y,z+pos.z
-                create_block(ivec3(i, j, k), ivec3(1, 1, 1), color, color_noise)
-                i,j,k = x+pos.x,z+pos.y,y+pos.z
-                create_block(ivec3(i, j, k), ivec3(1, 1, 1), color, color_noise)
-                i,j,k = z+pos.x,y+pos.y,x+pos.z
-                create_block(ivec3(i, j, k), ivec3(1, 1, 1), color, color_noise)
+    points = 0
 
-            if z == 0 :
-                continue
-            if x > 0 and y > 0 and -z > 0 :
-                continue
-            z = -z
+    a,b,c,d=45.0,00.0,00.0,8.5
+    d2x = (x-a)**2 + (y-b)**2 + (z-c)**2
+    d2y = (x-b)**2 + (y-c)**2 + (z-a)**2
+    d2z = (x-c)**2 + (y-a)**2 + (z-b)**2
+    if d2x <= d**2 or d2y <= d**2 or d2z <= d**2 :
+        points = 1
 
-            i,j,k = x+pos.x,y+pos.y,z+pos.z
-            create_block(ivec3(i, j, k), ivec3(1, 1, 1), color, color_noise)
-            i,j,k = x+pos.x,z+pos.y,y+pos.z
-            create_block(ivec3(i, j, k), ivec3(1, 1, 1), color, color_noise)
-            i,j,k = z+pos.x,y+pos.y,x+pos.z
-            create_block(ivec3(i, j, k), ivec3(1, 1, 1), color, color_noise)
+    a,b,c,d=30.0,30.0,-10.0,14.5
+    d2x = (x-a)**2 + (y-b)**2 + (z-c)**2
+    d2y = (x-b)**2 + (y-c)**2 + (z-a)**2
+    d2z = (x-c)**2 + (y-a)**2 + (z-b)**2
+    if d2x <= d**2 or d2y <= d**2 or d2z <= d**2 :
+        points = 1
+
+    balls = 0
+    for i in range(1,9) :
+        zoom = ti.pow(0.92,(i-1)*3)
+        r = ti.floor(90 * zoom)  - 0.5
+        if r2>=(r-2)**2 and r2<=r**2 :
+            balls = 1
+        
+    res *= balls
+    res += points
+    return res
 
 @ti.kernel
 def initialize_voxels():
 
-    for r in range(1,9) :
-        c1 = vec3(1.0, 0.0, 0.5)
-        c2 = vec3(0.5, 1.0, 0.0)
-        c3 = vec3(0.0, 0.5, 1.0)
-
-        rnd = (r+1) % 3
-
-        color = c1
-        if rnd == 1 :
-            color = c2
-        elif rnd == 2 :
-            color = c3
-            
-        create_cut_ball(
-                ivec3(-10, -10, -10),
-                ti.floor(40 * ti.pow(0.92,(r-1)*3))  - 0.5, 
-                color, 
-                vec3(0.10)
-        )
-
+    for i in range(0,128**3) :
+        x,y,z=i//(128**2)-64,(i//128)%128-64,i%128-64
+        if 0==sdf(x,y,z) :
+            continue
+        scene.set_voxel(vec3(x,y,z),1,vec3(1.0-(x+64)/128,1.0-(z+64)/128,1.0-(y+64)/128))
+        
 initialize_voxels()
 
 scene.finish()
